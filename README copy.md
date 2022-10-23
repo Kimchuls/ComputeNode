@@ -1,0 +1,1 @@
+`make && ./main [ip]` to execute file
