@@ -538,14 +538,14 @@ namespace DSMEngine
         rc = sock_sync_data(res->sock, 1, temp_send, &temp_char);
         if (rc) /* just send a dummy char back and forth */
         {
-            fprintf(stderr, "sync error after QPs are were moved to RTS\n");
+            fprintf(stderr, "sync error before RDMA_Send post_send\n");
             goto RDMA_Send_exit;
         }
 
         rc = post_send(IBV_WR_SEND);
         if (rc)
         {
-            fprintf(stderr, "failed to post RR\n");
+            fprintf(stderr, "failed to RDMA_Send post_send\n");
             goto RDMA_Send_exit;
         }
         /* sync to make sure that both sides are in states that they can connect to prevent packet loose */
@@ -553,7 +553,7 @@ namespace DSMEngine
         rc = poll_completion();
         if (rc)
         {
-            fprintf(stderr, "poll completion failed\n");
+            fprintf(stderr, "RDMA_Send poll completion failed\n");
             goto RDMA_Send_exit;
         }
     RDMA_Send_exit:
@@ -568,7 +568,7 @@ namespace DSMEngine
         rc = post_receive();
         if (rc)
         {
-            fprintf(stderr, "failed to post RR\n");
+            fprintf(stderr, "failed to RDMA_Receive post_receive\n");
             goto RDMA_Receive_exit;
         }
         /* sync to make sure that both sides are in states that they can connect to prevent packet loose */
@@ -576,14 +576,14 @@ namespace DSMEngine
         rc = sock_sync_data(res->sock, 1, temp_send, &temp_char);
         if (rc) /* just send a dummy char back and forth */
         {
-            fprintf(stderr, "sync error after QPs are were moved to RTS\n");
+            fprintf(stderr, "sync error after RDMA_Receive post_receive\n");
             goto RDMA_Receive_exit;
         }
 
         rc = poll_completion();
         if (rc)
         {
-            fprintf(stderr, "poll completion failed\n");
+            fprintf(stderr, "RDMA_Receive poll completion failed\n");
             goto RDMA_Receive_exit;
         }
     RDMA_Receive_exit:
@@ -687,19 +687,19 @@ namespace DSMEngine
         char temp_send_R[] = "R";
         if (post_send(IBV_WR_RDMA_READ))
         {
-            fprintf(stderr, "failed to post SR 2\n");
+            fprintf(stderr, "failed to RDMA_Read post_send\n");
             return 1;
         }
         if (poll_completion())
         {
-            fprintf(stderr, "poll completion failed 2\n");
+            fprintf(stderr, "RDMA_Read poll completion failed\n");
             return 1;
         }
-        if (sock_sync_data(res->sock, 1, temp_send_R, &temp_char)) /* just send a dummy char back and forth */
-        {
-            fprintf(stderr, "sync error after RDMA ops\n");
-            return 1;
-        }
+        // if (sock_sync_data(res->sock, 1, temp_send_R, &temp_char)) /* just send a dummy char back and forth */
+        // {
+        //     fprintf(stderr, "sync error after RDMA ops\n");
+        //     return 1;
+        // }
         return 0;
     }
     int RDMA_Manager::RDMA_Write()
@@ -708,17 +708,17 @@ namespace DSMEngine
         char temp_send_W[] = "W";
         if (post_send(IBV_WR_RDMA_WRITE))
         {
-            fprintf(stderr, "failed to post SR 3\n");
+            fprintf(stderr, "failed to RDMA_Write post_send\n");
             return 1;
         }
         if (poll_completion())
         {
-            fprintf(stderr, "poll completion failed 3\n");
+            fprintf(stderr, "RDMA_Write poll completion failed 3\n");
             return 1;
         }
         if (sock_sync_data(res->sock, 1, temp_send_W, &temp_char)) /* just send a dummy char back and forth */
         {
-            fprintf(stderr, "sync error after RDMA ops\n");
+            fprintf(stderr, "sync error after RDMA_Write post_send\n");
             return 1;
         }
         return 0;

@@ -9,7 +9,35 @@
 #include <string>
 #include <stdlib.h>
 using namespace std;
-void work(char *sn)
+
+string vector2string(vector<vector<string>> &file, int id1, int id2)
+{
+    string out = "{";
+    long unsigned i, j;
+    for (i = id1; i < file.size() && i <= id2; i++)
+    {
+        string outp = "{";
+        for (j = 0; j < file[i].size(); j++)
+        {
+            outp += to_string(j) + ":" + file[i][j];
+            if (j != file[i].size() - 1)
+            {
+                outp += ",";
+            }
+        }
+        outp += "}";
+        out += outp;
+        if (i < id2)
+        {
+            out += ",";
+        }
+    }
+    out += "}";
+    cout << "vector2string " << out << endl;
+    return out;
+}
+
+void work(char *sn, vector<vector<string>> &file)
 {
     struct DSMEngine::config_t config = {
         NULL,  /* dev_name */
@@ -17,98 +45,157 @@ void work(char *sn)
         19876, /* tcp_port */
         1,     /* ib_port */
         -1 /* gid_idx */};
-    shared_ptr<DSMEngine::RDMA_Manager> rdma_mg = shared_ptr<DSMEngine::RDMA_Manager>();
-    rdma_mg = make_shared<DSMEngine::RDMA_Manager>(config);
-
     int rc = 1;
     char temp_char;
     char temp_send[] = "R";
-    if (rdma_mg->init())
+
+    shared_ptr<DSMEngine::RDMA_Manager> rdma_mg_1 = shared_ptr<DSMEngine::RDMA_Manager>();
+    rdma_mg_1 = make_shared<DSMEngine::RDMA_Manager>(config);
+    shared_ptr<DSMEngine::RDMA_Manager> rdma_mg_2 = shared_ptr<DSMEngine::RDMA_Manager>();
+    rdma_mg_2 = make_shared<DSMEngine::RDMA_Manager>(config);
+    if (rdma_mg_1->init())
     {
         fprintf(stderr, "failed to init resources\n");
-        goto main_exit;
-    }
-
-    if (rdma_mg->RDMA_Receive())
-    {
-        fprintf(stderr, "failed to connect QPs\n");
-        goto main_exit;
-    }
-    /* after polling the completion we have the message in the client buffer too */
-    fprintf(stdout, "Message is: '%s', %ld\n", rdma_mg->res->buf, strlen(rdma_mg->res->buf));
-
-    strcpy(rdma_mg->res->buf, "reverse send test");
-    fprintf(stdout, "going to send the message: '%s'\n", rdma_mg->res->buf);
-    /* let the server post the sr */
-    if (rdma_mg->RDMA_Send())
-    {
-        fprintf(stderr, "failed to post sr\n");
-        goto main_exit;
-    }
-
-    /*-------------------------------------------------------------------------------------------------------------------------------------------------------*/
-
-    strcpy(rdma_mg->res->buf, "3522222222");
-    if (rdma_mg->sock_sync_data(rdma_mg->res->sock, 1, temp_send, &temp_char)) /* just send a dummy char back and forth */
-    {
-        fprintf(stderr, "sync error before RDMA ops\n");
         rc = 1;
         goto main_exit;
     }
 
-    /*-------------------------------------------------------------------------------------------------------------------------------------------------------*/
-    strcpy(rdma_mg->res->buf, "3522222222");
-    if (rdma_mg->RDMA_Read())
+    if (rdma_mg_2->init())
     {
-        fprintf(stderr, "failed to RDMA_Read 2\n");
+        fprintf(stderr, "failed to init resources\n");
         rc = 1;
         goto main_exit;
     }
-    fprintf(stdout, "Contents of server's buffer: '%s'\n", rdma_mg->res->buf);
+    char order[30];
+    int id1, id2;
+    while (1)
+    {
+        fscanf(stdin, "%s", order);
+        if (0 == strcmp(order, "read"))
+        {
+            fprintf(stdout, "read order solved\n");
+            fscanf(stdin, "%d %d", &id1, &id2);
+            string out_string = "read," + to_string(id1) + "," + to_string(id2) + ",";
+            char *out_chars = const_cast<char *>(out_string.c_str());
 
-    strcpy(rdma_mg->res->buf, "354444444444444");
-    fprintf(stdout, "Now replacing it with: '%s'\n", rdma_mg->res->buf);
-    if (rdma_mg->RDMA_Write())
-    {
-        fprintf(stderr, "failed to RDMA_Write\n");
-        rc = 1;
-        goto main_exit;
-    }
+            strcpy(rdma_mg_1->res->buf, out_chars);
+            fprintf(stdout, "going to send the message: '%s'\n", rdma_mg_1->res->buf);
+            /* let the server post the sr */
+            if (rdma_mg_1->RDMA_Send())
+            {
+                fprintf(stderr, "failed to rdma_mg_1 RDMA_Send\n");
+                rc = 1;
+                goto main_exit;
+            }
 
-    strcpy(rdma_mg->res->buf, "358888");
-    fprintf(stdout, "Now replacing it with: '%s'\n", rdma_mg->res->buf);
-    if (rdma_mg->RDMA_Write())
-    {
-        fprintf(stderr, "failed to RDMA_Write\n");
-        rc = 1;
-        goto main_exit;
-    }
+            if (rdma_mg_1->RDMA_Receive())
+            {
+                fprintf(stderr, "failed to rdma_mg_1 RDMA_Receive\n");
+                rc = 1;
+                goto main_exit;
+            }
+            if (0 == strcmp(rdma_mg_1->res->buf, "already"))
+            {
+                fprintf(stdout, "Message is: '%s', %ld\n", rdma_mg_1->res->buf, strlen(rdma_mg_1->res->buf));
+            }
+            else
+            {
+                fprintf(stderr, "failed receive already\n");
+                rc = 1;
+                goto main_exit;
+            }
+            if (rdma_mg_2->RDMA_Read())
+            {
+                fprintf(stderr, "failed to rdma_mg_2 RDMA_Read\n");
+                rc = 1;
+                goto main_exit;
+            }
+            fprintf(stdout, "Contents of server's buffer: '%s'\n", rdma_mg_2->res->buf);
+            if (rdma_mg_1->sock_sync_data(rdma_mg_1->res->sock, 1, temp_send, &temp_char)) /* just send a dummy char back and forth */
+            {
+                fprintf(stderr, "sync error after RDMA ops\n");
+                rc = 1;
+                goto main_exit;
+            }
+            if (rdma_mg_2->sock_sync_data(rdma_mg_2->res->sock, 1, temp_send, &temp_char)) /* just send a dummy char back and forth */
+            {
+                fprintf(stderr, "sync error after RDMA ops\n");
+                rc = 1;
+                goto main_exit;
+            }
+        }
+        else if (0 == strcmp(order, "write"))
+        {
+            fprintf(stdout, "write order solved\n");
+            fscanf(stdin, "%d %d", &id1, &id2);
 
-    strcpy(rdma_mg->res->buf, "36666666666");
-    if (rdma_mg->RDMA_Read())
-    {
-        fprintf(stderr, "failed to RDMA_Read 2\n");
-        rc = 1;
-        goto main_exit;
+            strcpy(rdma_mg_1->res->buf, "write,");
+            fprintf(stdout, "going to send the message: '%s'\n", rdma_mg_1->res->buf);
+            /* let the server post the sr */
+            if (rdma_mg_1->RDMA_Send())
+            {
+                fprintf(stderr, "failed to rdma_mg_1 RDMA_Send\n");
+                rc = 1;
+                goto main_exit;
+            }
+
+            string out_string = "write " + vector2string(file, id1, id2);
+            char *out_chars = const_cast<char *>(out_string.c_str());
+            strcpy(rdma_mg_2->res->buf, out_chars);
+            fprintf(stdout, "Now replacing it with: '%s'\n", rdma_mg_2->res->buf);
+            if (rdma_mg_2->RDMA_Write())
+            {
+                fprintf(stderr, "failed to rdma_mg_2 RDMA_Write\n");
+                rc = 1;
+                goto main_exit;
+            }
+            if (rdma_mg_1->sock_sync_data(rdma_mg_1->res->sock, 1, temp_send, &temp_char)) /* just send a dummy char back and forth */
+            {
+                fprintf(stderr, "sync error after RDMA ops\n");
+                rc = 1;
+                goto main_exit;
+            }
+            if (rdma_mg_2->sock_sync_data(rdma_mg_2->res->sock, 1, temp_send, &temp_char)) /* just send a dummy char back and forth */
+            {
+                fprintf(stderr, "sync error after RDMA ops\n");
+                rc = 1;
+                goto main_exit;
+            }
+        }
+        else if (0 == strcmp(order, "exit"))
+        {
+            fprintf(stdout, "exit order solved\n");
+            break;
+        }
+        else
+        {
+            fprintf(stdout, "wrong order\n");
+        }
     }
-    fprintf(stdout, "Contents of server's buffer: '%s'\n", rdma_mg->res->buf);
 
     rc = 0;
 main_exit:
-    if (rdma_mg->resources_destroy())
+    if (rdma_mg_1->resources_destroy())
     {
         fprintf(stderr, "failed to destroy resources\n");
         rc = 1;
     }
-    if (config.dev_name)
-        free((char *)rdma_mg->config.dev_name);
+    if (rdma_mg_2->resources_destroy())
+    {
+        fprintf(stderr, "failed to destroy resources\n");
+        rc = 1;
+    }
+    if (rdma_mg_1->config.dev_name)
+        free((char *)rdma_mg_1->config.dev_name);
+    if (rdma_mg_2->config.dev_name)
+        free((char *)rdma_mg_2->config.dev_name);
     fprintf(stdout, "\ntest result is %d\n", rc);
     // return rc;
 }
 
 #include <map>
 
-void csv_data_load(char *filename)
+void csv_data_load(char *filename, vector<vector<string>> &file)
 {
     ifstream csv_data(filename);
     string line;
@@ -117,12 +204,13 @@ void csv_data_load(char *filename)
         cout << "Error: opening file fail" << endl;
         exit(1);
     }
-    istringstream sin;    //将整行字符串line读入到字符串istringstream中
+    istringstream sin; //将整行字符串line读入到字符串istringstream中
+    // vector<vector<string>> file;
     vector<string> words; //声明一个字符串向量
     string word;
 
     // 读取标题行
-    getline(csv_data, line);
+    // getline(csv_data, line);
     // 读取数据
     while (getline(csv_data, line))
     {
@@ -132,10 +220,11 @@ void csv_data_load(char *filename)
         while (getline(sin, word, ',')) //将字符串流sin中的字符读到field字符串中，以逗号为分隔符
         {
             words.push_back(word); //将每一格中的数据逐个push
-            cout << word;
+            // cout << word;
             // cout << atol(word.c_str());
         }
-        cout << endl;
+        file.push_back(words);
+        // cout << endl;
         // do something。。。
     }
     csv_data.close();
@@ -162,10 +251,13 @@ void csv_write()
     }
     outFile.close();
 }
+
 int main(int argc, char *argv[])
 {
-    work(argv[argc - 1]);
-    work(argv[argc-1]);
+    vector<vector<string>> file;
+    csv_data_load("test.csv", file);
+    work(argv[argc - 1], file);
+    // work(argv[argc-1]);
     // char *servername = argv[argc - 1];
     // csv_data_load("test.csv");
     // csv_write();
